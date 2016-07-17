@@ -6,3 +6,5 @@ version = "0.1.0"
 name = "nc"
 
 [dependencies]
+argparse = "0.2"
+crossbeam = "0.2"
