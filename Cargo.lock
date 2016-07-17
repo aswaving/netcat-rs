@@ -1,0 +1,4 @@
+[root]
+name = "netcat-rs"
+version = "0.1.0"
+

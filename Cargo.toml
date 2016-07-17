@@ -1,0 +1,8 @@
+[package]
+name = "netcat-rs"
+version = "0.1.0"
+
+[[bin]]
+name = "nc"
+
+[dependencies]
