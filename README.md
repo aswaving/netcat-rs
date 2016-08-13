@@ -1,3 +1,5 @@
-A Rust port of netcat. 
-Goal is to make this a drop-in replacement.
-Will probably need asynch I/O (from mio?).
+A Rust port of netcat to learn some Rust.
+
+Status: draft, incomplete.
+
+[![Build Status](https://travis-ci.org/aswaving/netcat-rs.svg?branch=master)](https://travis-ci.org/aswaving/netcat-rs)
