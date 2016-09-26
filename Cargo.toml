@@ -6,6 +6,5 @@ version = "0.1.0"
 name = "nc"
 
 [dependencies]
-argparse = "0.2"
-mio = "0.5"
-net2 = "0.2"
+libc = "0.2"
+clap = "2"

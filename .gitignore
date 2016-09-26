@@ -1,3 +1,4 @@
 target
-*.swp
-*.bk
+*.sw?
+*.rs.bk
+*.rs.rustfmt
