@@ -30,7 +30,7 @@ struct ProgramOptions {
     source_port: u16,
     target_port: u16,
     verbosity: u8,
-    wait_time: Option<u32>,
+    wait_time_ms: Option<u32>,
 }
 
 enum NetworkConnection {
@@ -80,7 +80,7 @@ fn parse_commandline() -> ProgramOptions {
     options.ipv6_only = matches.is_present("ipv6");
     options.verbosity = matches.occurrences_of("verbose") as u8;
     if let Some(wait_time) = matches.value_of("wait-time") {
-        options.wait_time = Some(u32::from_str(wait_time).expect("Invalid wait time"));
+        options.wait_time_ms = Some(u32::from_str(wait_time).expect("Invalid wait time") * 1000);
     }
     options
 }
@@ -111,7 +111,7 @@ impl EventHandler for NetcatClientEventHandler {
                     let mut buf = [0; 1024];
                     match stdin.read(&mut buf) {
                         Ok(n) => {
-                            //println!("stdin: {} bytes read", n);
+                            // println!("stdin: {} bytes read", n);
                             match self.network_client {
                                 NetworkConnection::TcpClient(ref mut tcpstream) => {
                                     tcpstream.write(&buf[0..n]).unwrap();
@@ -130,7 +130,7 @@ impl EventHandler for NetcatClientEventHandler {
                                 event_loop.unregister_stdin();
                                 if let NetworkConnection::TcpClient(ref mut tcpstream) =
                                        self.network_client {
-                                    tcpstream.shutdown(std::net::Shutdown::Write);
+                                    tcpstream.shutdown(std::net::Shutdown::Write).unwrap(); // TODO
                                 }
                             }
                         }
@@ -148,13 +148,8 @@ impl EventHandler for NetcatClientEventHandler {
                 } {
                     stdout.write(&buf[0..n]).unwrap();
                     if n == 0 {
+                        shutdown_loop = true;
                         self.network_open = false;
-                        if let NetworkConnection::TcpClient(ref mut tcpstream) =
-                               self.network_client {
-                            tcpstream.shutdown(std::net::Shutdown::Read);
-                            shutdown_loop = true;
-                        }
-
                     }
                 }
             }
@@ -165,7 +160,7 @@ impl EventHandler for NetcatClientEventHandler {
         }
     }
 
-    fn timeout(&mut self, eventloop: &mut EventLoop ) {
+    fn timeout(&mut self, eventloop: &mut EventLoop) {
         eventloop.shutdown();
     }
 }
@@ -180,7 +175,7 @@ fn main() {
 
     let stdin = stdin();
     let connection;
-    let mut eventloop = EventLoop::new(options.wait_time);
+    let mut eventloop = EventLoop::new(options.wait_time_ms);
     if !options.detach_stdin {
         eventloop.register_stdin(&stdin);
     }
@@ -188,16 +183,16 @@ fn main() {
     if options.use_udp {
         let sock = UdpSocket::bind(("127.0.0.1", options.source_port)).unwrap();
         sock.connect((options.hostname.as_str(), options.target_port)).unwrap();
-        if let Some(timeout) = options.wait_time {
-            sock.set_read_timeout(Some(Duration::new(timeout as u64, 0)));
+        if let Some(timeout) = options.wait_time_ms {
+            sock.set_read_timeout(Some(Duration::new(timeout as u64, 0))).unwrap(); // TODO
         }
         eventloop.register_read(&sock);
         connection = NetworkConnection::UdpClient(sock);
     } else {
         let tcpstream = TcpStream::connect((options.hostname.as_str(), options.target_port))
             .unwrap();
-        if let Some(timeout) = options.wait_time {
-            tcpstream.set_read_timeout(Some(Duration::new(timeout as u64, 0)));
+        if let Some(timeout) = options.wait_time_ms {
+            tcpstream.set_read_timeout(Some(Duration::new(timeout as u64, 0))).unwrap(); // TODO
         }
         eventloop.register_read(&tcpstream);
         connection = NetworkConnection::TcpClient(tcpstream);
