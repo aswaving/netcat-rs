@@ -1,8 +1,9 @@
+#!/usr/bin/env python
 import os
 import unittest
 
 from tempfile import mkstemp
-from subprocess import Popen
+from subprocess import Popen, PIPE
 from random import randint
 
 def generate_random_file(size):
@@ -54,6 +55,15 @@ class NetcatClientTests(unittest.TestCase):
         self.assertEquals(0, srv.wait())
         diff = Popen(['diff', fname, out_filename])
         self.assertEquals(0, diff.wait())
+    def test_stdin_pipe_tcp(self):
+        outfd, outfilename = mkstemp()
+        srv = Popen(['/usr/bin/nc', '-l', '1234'], stdout=PIPE)
+        clt = Popen('echo bla | nc localhost 1234', shell=True)
+        out, _ = srv.communicate()
+        self.assertEquals('bla\n', out)
+        self.assertEquals(0, clt.wait())
+        self.assertEquals(0, srv.wait())
+        
 
 if __name__ == "__main__":
     unittest.main()
