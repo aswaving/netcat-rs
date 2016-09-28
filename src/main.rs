@@ -163,6 +163,12 @@ impl EventHandler for NetcatClientEventHandler {
     fn timeout(&mut self, eventloop: &mut EventLoop) {
         eventloop.shutdown();
     }
+
+    fn hangup(&mut self, eventloop: &mut EventLoop, connection_id: Token) {
+        if connection_id == Token(0) {
+            eventloop.shutdown();
+        }
+    }
 }
 
 fn main() {
