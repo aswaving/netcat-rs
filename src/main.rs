@@ -78,6 +78,7 @@ fn parse_commandline() -> ProgramOptions {
     options.use_udp = matches.is_present("udp");
     options.ipv4_only = matches.is_present("ipv4");
     options.ipv6_only = matches.is_present("ipv6");
+    options.use_listen = matches.is_present("listen");
     options.verbosity = matches.occurrences_of("verbose") as u8;
     if let Some(wait_time) = matches.value_of("wait-time") {
         options.wait_time_ms = Some(u32::from_str(wait_time).expect("Invalid wait time") * 1000);
@@ -106,10 +107,10 @@ impl EventHandler for NetcatClientEventHandler {
         let mut shutdown_loop = false;
         if eventset.is_readable() {
             if token == Token(0) {
+                let stdin = stdin();
                 if self.stdin_open {
-                    let mut stdin = stdin();
                     let mut buf = [0; 1024];
-                    match stdin.read(&mut buf) {
+                    match stdin.lock().read(&mut buf) {
                         Ok(n) => {
                             // println!("stdin: {} bytes read", n);
                             match self.network_client {
@@ -140,13 +141,13 @@ impl EventHandler for NetcatClientEventHandler {
                     }
                 }
             } else {
-                let mut stdout = stdout();
+                let stdout = stdout();
                 let mut buf = [0; 1024];
                 if let Ok(n) = match self.network_client {
                     NetworkConnection::TcpClient(ref mut tcpstream) => tcpstream.read(&mut buf),
                     NetworkConnection::UdpClient(ref mut udpsocket) => udpsocket.recv(&mut buf),
                 } {
-                    stdout.write(&buf[0..n]).unwrap();
+                    stdout.lock().write(&buf[0..n]).unwrap();
                     if n == 0 {
                         shutdown_loop = true;
                         self.network_open = false;
@@ -186,30 +187,32 @@ fn main() {
         eventloop.register_stdin(&stdin);
     }
 
-    if options.use_udp {
-        let sock = UdpSocket::bind(("127.0.0.1", options.source_port)).unwrap();
-        sock.connect((options.hostname.as_str(), options.target_port)).unwrap();
-        if let Some(timeout) = options.wait_time_ms {
-            sock.set_read_timeout(Some(Duration::new(timeout as u64, 0))).unwrap(); // TODO
+    if options.use_listen {} else {
+        if options.use_udp {
+            let sock = UdpSocket::bind(("0.0.0.0", options.source_port)).unwrap();
+            sock.connect((options.hostname.as_str(), options.target_port)).unwrap();
+            if let Some(timeout) = options.wait_time_ms {
+                sock.set_read_timeout(Some(Duration::new(timeout as u64, 0))).unwrap(); // TODO
+            }
+            eventloop.register_read(&sock);
+            connection = NetworkConnection::UdpClient(sock);
+        } else {
+            let tcpstream = TcpStream::connect((options.hostname.as_str(), options.target_port))
+                .unwrap();
+            if let Some(timeout) = options.wait_time_ms {
+                tcpstream.set_read_timeout(Some(Duration::new(timeout as u64, 0))).unwrap(); // TODO
+            }
+            eventloop.register_read(&tcpstream);
+            connection = NetworkConnection::TcpClient(tcpstream);
         }
-        eventloop.register_read(&sock);
-        connection = NetworkConnection::UdpClient(sock);
-    } else {
-        let tcpstream = TcpStream::connect((options.hostname.as_str(), options.target_port))
-            .unwrap();
-        if let Some(timeout) = options.wait_time_ms {
-            tcpstream.set_read_timeout(Some(Duration::new(timeout as u64, 0))).unwrap(); // TODO
-        }
-        eventloop.register_read(&tcpstream);
-        connection = NetworkConnection::TcpClient(tcpstream);
-    }
 
 
-    let mut eh = NetcatClientEventHandler::new(connection);
-    if let Err(err) = eventloop.run(&mut eh) {
-        exit_code = 1;
-        if options.verbosity > 0 {
-            println_stderr!("{}", err);
+        let mut eh = NetcatClientEventHandler::new(connection);
+        if let Err(err) = eventloop.run(&mut eh) {
+            exit_code = 1;
+            if options.verbosity > 0 {
+                println_stderr!("{}", err);
+            }
         }
     }
     exit(exit_code);
