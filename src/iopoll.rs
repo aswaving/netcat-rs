@@ -1,13 +1,12 @@
 // extern crate libc;
-
-#![allow(unused)]
 use libc::{poll, pollfd, nfds_t, POLLIN, POLLOUT, POLLERR, POLLHUP, POLLNVAL, POLLPRI};
 
-use std::io::prelude::*;
 use std::io::Stdin;
 use std::os::unix::io::{RawFd, AsRawFd};
 
-#[derive(Debug,Eq,PartialEq,Clone,Copy)]
+use std::fmt;
+
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub struct Token(pub i32);
 
 pub struct EventLoop {
@@ -29,11 +28,10 @@ pub trait EventHandler {
 
 pub const TIMEOUT_INFINITE: i32 = -1;
 
-#[derive(Copy,Clone)]
+#[derive(Copy, Clone)]
 pub struct EventSet {
     events: i16,
 }
-
 
 impl EventSet {
     pub fn empty() -> EventSet {
@@ -67,9 +65,10 @@ impl EventSet {
     pub fn is_empty(&self) -> bool {
         self.events == 0
     }
+}
 
-    pub fn to_string(&self) -> String {
-
+impl fmt::Display for EventSet {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         let mut events_str = String::new();
 
         if (self.events & POLLIN) == POLLIN {
@@ -94,7 +93,7 @@ impl EventSet {
             let last_char_idx = events_str.len() - 1;
             events_str.remove(last_char_idx);
         }
-        events_str
+        write!(formatter, "{}", events_str)
     }
 }
 
@@ -156,7 +155,7 @@ impl EventLoop {
             .iter()
             .enumerate()
             .find(|&(_, pollfd)| pollfd.fd == fd)
-            .map_or(None, |(i, _)| Some(i as usize));
+            .map_or(None, |(i, _)| Some(i));
         if let Some(index) = found {
             self.pollfds.remove(index);
         }
@@ -179,6 +178,7 @@ impl EventLoop {
                     event_handler.timeout(self);
                 }
                 _ => {
+                    eprintln!("poll_result={}", poll_result);
                     let mut bla = Vec::<(RawFd, EventSet)>::new();
                     for pollfd in &mut self.pollfds {
                         let received_events = EventSet { events: pollfd.revents };
@@ -187,7 +187,6 @@ impl EventLoop {
                         }
                     }
                     for (fd, eventset) in bla {
-                        // println!("{} {}", fd, eventset.to_string());
                         if eventset.is_readable() || eventset.is_writable() {
                             event_handler.ready_for_io(self, Token(fd), eventset);
                         }
@@ -204,18 +203,11 @@ impl EventLoop {
                     }
                 }
             }
-            if !remove_pollfds.is_empty() {
-                for fd in remove_pollfds {
-                    let found = self.pollfds
-                        .iter()
-                        .enumerate()
-                        .find(|&(_, pollfd)| pollfd.fd == fd)
-                        .map_or(None, |(i, _)| Some(i as usize));
-                    if let Some(index) = found {
-                        self.pollfds.remove(index);
-                    }
-                }
+
+            for fd in remove_pollfds {
+                self.remove_fd(fd);
             }
+
             if shutdown_loop {
                 self.shutdown();
             }
@@ -237,7 +229,7 @@ impl EventLoop {
             .iter()
             .enumerate()
             .find(|&(_, pollfd)| pollfd.fd == fd)
-            .map_or(None, |(i, _)| Some(i as usize));
+            .map_or(None, |(i, _)| Some(i));
         if let Some(index) = found {
             self.pollfds.remove(index);
         }
@@ -254,7 +246,8 @@ impl EventLoop {
     }
 
     pub fn register_read<T>(&mut self, io: &T) -> Token
-        where T: AsRawFd
+    where
+        T: AsRawFd,
     {
         let fd = io.as_raw_fd();
         self.register_fd(fd, EventSetBuilder::new().readable().finalize());
@@ -262,7 +255,8 @@ impl EventLoop {
     }
 
     pub fn register_write<T>(&mut self, io: &mut T) -> Token
-        where T: AsRawFd
+    where
+        T: AsRawFd,
     {
         let fd = io.as_raw_fd();
         self.register_fd(fd, EventSetBuilder::new().writable().finalize());
