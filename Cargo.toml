@@ -6,6 +6,7 @@ categories = ["command-line-utilities", "network"]
 
 [[bin]]
 name = "nc"
+path = "src/main.rs"
 
 [dependencies]
 libc = "0.2"
