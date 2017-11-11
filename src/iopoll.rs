@@ -42,6 +42,7 @@ impl EventSet {
         (self.events & POLLIN) == POLLIN || (self.events & POLLPRI) == POLLPRI
     }
 
+    #[allow(unused)]
     pub fn is_high_prio_readable(&self) -> bool {
         (self.events & POLLPRI) == POLLPRI
     }
@@ -114,11 +115,13 @@ impl EventSetBuilder {
         self
     }
 
+    #[allow(unused)]
     pub fn writable(mut self) -> EventSetBuilder {
         self.eventset.events |= POLLOUT;
         self
     }
 
+    #[allow(unused)]
     pub fn all(mut self) -> EventSetBuilder {
         self.eventset.events = POLLIN | POLLPRI | POLLOUT;
         self
@@ -148,6 +151,8 @@ impl EventLoop {
 
     pub fn shutdown(&mut self) {
         self.active = false;
+
+        trace!("Event loop deactivated");
     }
 
     pub fn remove_fd(&mut self, fd: RawFd) {
@@ -155,7 +160,7 @@ impl EventLoop {
             .iter()
             .enumerate()
             .find(|&(_, pollfd)| pollfd.fd == fd)
-            .map_or(None, |(i, _)| Some(i));
+            .and_then(|(i, _)| Some(i));
         if let Some(index) = found {
             self.pollfds.remove(index);
         }
@@ -178,7 +183,8 @@ impl EventLoop {
                     event_handler.timeout(self);
                 }
                 _ => {
-                    eprintln!("poll_result={}", poll_result);
+                    trace!("poll_result={} descriptors ready for io", poll_result);
+
                     let mut bla = Vec::<(RawFd, EventSet)>::new();
                     for pollfd in &mut self.pollfds {
                         let received_events = EventSet { events: pollfd.revents };
@@ -186,7 +192,9 @@ impl EventLoop {
                             bla.push((pollfd.fd, received_events));
                         }
                     }
-                    for (fd, eventset) in bla {
+                    for (nr, &(fd, eventset)) in bla.iter().enumerate() {
+                        trace!("{}: event {} on fd {}", nr, eventset, fd);
+
                         if eventset.is_readable() || eventset.is_writable() {
                             event_handler.ready_for_io(self, Token(fd), eventset);
                         }
@@ -209,6 +217,8 @@ impl EventLoop {
             }
 
             if shutdown_loop {
+                trace!("Event loop is shut down");
+
                 self.shutdown();
             }
         }
@@ -229,7 +239,7 @@ impl EventLoop {
             .iter()
             .enumerate()
             .find(|&(_, pollfd)| pollfd.fd == fd)
-            .map_or(None, |(i, _)| Some(i));
+            .and_then(|(i, _)| Some(i));
         if let Some(index) = found {
             self.pollfds.remove(index);
         }
@@ -254,6 +264,8 @@ impl EventLoop {
         Token(fd)
     }
 
+
+    #[allow(unused)]
     pub fn register_write<T>(&mut self, io: &mut T) -> Token
     where
         T: AsRawFd,

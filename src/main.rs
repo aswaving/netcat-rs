@@ -1,6 +1,8 @@
 extern crate libc;
 extern crate clap;
 
+#[macro_use]
+mod util;
 mod iopoll;
 
 use clap::{Arg, App};
@@ -120,16 +122,21 @@ impl NetcatClientEventHandler {
 
 impl EventHandler for NetcatClientEventHandler {
     fn ready_for_io(&mut self, event_loop: &mut EventLoop, token: Token, eventset: EventSet) {
-        eprintln!("ready for io token={:?},eventset={}", token, eventset);
+        trace!("ready for io token={:?},eventset={}", token, eventset);
+
         let mut shutdown_loop = false;
         if eventset.is_readable() {
             if token == Token(0) {
                 let stdin = stdin();
                 if self.stdin_open {
                     let mut buf = [0; 1024];
+
+                    trace!("start read from stdin");
+
                     match stdin.lock().read(&mut buf) {
                         Ok(n) => {
-                            eprintln!("stdin: {} bytes read", n);
+                            trace!("stdin: {} bytes read", n);
+
                             match self.network_client {
                                 NetworkConnection::TcpClient(ref mut tcpstream) => {
                                     tcpstream.write_all(&buf[0..n]).unwrap();
@@ -138,8 +145,21 @@ impl EventHandler for NetcatClientEventHandler {
                                     match udpsocket.send(&buf[0..n]) {
                                         Ok(sent) => {
                                             shutdown_loop = sent != n;
+                                            if shutdown_loop {
+                                                eprintln!(
+                                                    "Shutting down loop after udp send, number of bytes sent {} != num bytes in buf {}",
+                                                    sent,
+                                                    n
+                                                );
+                                            }
                                         }
-                                        Err(_) => shutdown_loop = true,
+                                        Err(err) => {
+                                            eprintln!(
+                                                "Shutting down loop, error when sending to udpsocket {}",
+                                                err
+                                            );
+                                            shutdown_loop = true;
+                                        }
                                     }
                                 }
                             }
@@ -162,11 +182,24 @@ impl EventHandler for NetcatClientEventHandler {
                 let stdout = stdout();
                 let mut buf = [0; 1024];
                 if let Ok(n) = match self.network_client {
-                    NetworkConnection::TcpClient(ref mut tcpstream) => tcpstream.read(&mut buf),
-                    NetworkConnection::UdpClient(ref mut udpsocket) => udpsocket.recv(&mut buf),
+                    NetworkConnection::TcpClient(ref mut tcpstream) => {
+                        trace!("Start read from tcpstream");
+
+                        tcpstream.read(&mut buf)
+                    }
+                    NetworkConnection::UdpClient(ref mut udpsocket) => {
+                        trace!("Start recv from UDP socket");
+
+                        udpsocket.recv(&mut buf)
+                    }
                 }
                 {
+                    trace!("Read/recv done, writing to stdout");
+
                     stdout.lock().write_all(&buf[0..n]).unwrap();
+
+                    trace!("Write to stdout done");
+
                     if n == 0 {
                         shutdown_loop = true;
                         self.network_open = false;
@@ -175,20 +208,23 @@ impl EventHandler for NetcatClientEventHandler {
             }
         }
 
-        eprintln!("end ready for io");
+        trace!("end ready for io");
 
         if shutdown_loop {
+            trace!("Event loop is shut down");
+
             event_loop.shutdown();
         }
     }
 
     fn timeout(&mut self, eventloop: &mut EventLoop) {
-        eprintln!("timeout");
+        trace!("timeout");
+
         eventloop.shutdown();
     }
 
     fn hangup(&mut self, eventloop: &mut EventLoop, connection_id: Token) {
-        eprintln!("hangup token={:?}", connection_id);
+        trace!("hangup token={:?}", connection_id);
 
         if connection_id == Token(0) {
             eventloop.shutdown();
@@ -219,8 +255,11 @@ fn main() {
             let sock = UdpSocket::bind(("0.0.0.0", options.source_port)).unwrap();
             sock.connect((options.hostname.as_str(), options.target_port))
                 .unwrap();
+
+            trace!("{:?}", sock);
+
             if let Some(timeout) = options.wait_time_ms {
-                sock.set_read_timeout(Some(Duration::new(timeout as u64, 0)))
+                sock.set_read_timeout(Some(Duration::new(u64::from(timeout), 0)))
                     .unwrap(); // TODO
             }
             eventloop.register_read(&sock);
@@ -230,7 +269,7 @@ fn main() {
                 .unwrap();
             if let Some(timeout) = options.wait_time_ms {
                 tcpstream
-                    .set_read_timeout(Some(Duration::new(timeout as u64, 0)))
+                    .set_read_timeout(Some(Duration::new(u64::from(timeout), 0)))
                     .unwrap(); // TODO
             }
             eventloop.register_read(&tcpstream);

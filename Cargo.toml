@@ -4,6 +4,10 @@ version = "0.1.0"
 keywords = ["network"]
 categories = ["command-line-utilities", "network"]
 
+[features]
+default = []
+debugtrace = []
+
 [[bin]]
 name = "nc"
 path = "src/main.rs"
