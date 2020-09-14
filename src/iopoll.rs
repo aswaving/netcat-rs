@@ -1,8 +1,8 @@
 // extern crate libc;
-use libc::{poll, pollfd, nfds_t, POLLIN, POLLOUT, POLLERR, POLLHUP, POLLNVAL, POLLPRI};
+use libc::{nfds_t, poll, pollfd, POLLERR, POLLHUP, POLLIN, POLLNVAL, POLLOUT, POLLPRI};
 
 use std::io::Stdin;
-use std::os::unix::io::{RawFd, AsRawFd};
+use std::os::unix::io::{AsRawFd, RawFd};
 
 use std::fmt;
 
@@ -69,7 +69,7 @@ impl EventSet {
 }
 
 impl fmt::Display for EventSet {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut events_str = String::new();
 
         if (self.events & POLLIN) == POLLIN {
@@ -104,7 +104,9 @@ pub struct EventSetBuilder {
 
 impl EventSetBuilder {
     pub fn new() -> EventSetBuilder {
-        EventSetBuilder { eventset: EventSet::empty() }
+        EventSetBuilder {
+            eventset: EventSet::empty(),
+        }
     }
 
     pub fn finalize(self) -> EventSet {
@@ -156,20 +158,21 @@ impl EventLoop {
     }
 
     pub fn remove_fd(&mut self, fd: RawFd) {
-        let found = self.pollfds
+        let found = self
+            .pollfds
             .iter()
             .enumerate()
             .find(|&(_, pollfd)| pollfd.fd == fd)
-            .and_then(|(i, _)| Some(i));
+            .map(|(i, _)| i);
         if let Some(index) = found {
             self.pollfds.remove(index);
         }
     }
 
-    pub fn run(&mut self, event_handler: &mut EventHandler) -> Result<(), String> {
+    pub fn run(&mut self, event_handler: &mut dyn EventHandler) -> Result<(), String> {
         let pollfds_ptr = self.pollfds.as_mut_ptr();
         self.activate();
-        let mut result = Ok(());
+        let result = Ok(());
         while self.is_active() {
             let mut remove_pollfds = Vec::<RawFd>::new();
             let poll_result =
@@ -187,7 +190,9 @@ impl EventLoop {
 
                     let mut bla = Vec::<(RawFd, EventSet)>::new();
                     for pollfd in &mut self.pollfds {
-                        let received_events = EventSet { events: pollfd.revents };
+                        let received_events = EventSet {
+                            events: pollfd.revents,
+                        };
                         if !received_events.is_empty() {
                             bla.push((pollfd.fd, received_events));
                         }
@@ -227,7 +232,7 @@ impl EventLoop {
 
     fn register_fd(&mut self, fd: i32, eventset: EventSet) {
         let pollfd = pollfd {
-            fd: fd,
+            fd,
             events: eventset.events,
             revents: 0,
         };
@@ -235,11 +240,12 @@ impl EventLoop {
     }
 
     fn unregister_fd(&mut self, fd: i32) {
-        let found = self.pollfds
+        let found = self
+            .pollfds
             .iter()
             .enumerate()
             .find(|&(_, pollfd)| pollfd.fd == fd)
-            .and_then(|(i, _)| Some(i));
+            .map(|(i, _)| i);
         if let Some(index) = found {
             self.pollfds.remove(index);
         }
@@ -263,7 +269,6 @@ impl EventLoop {
         self.register_fd(fd, EventSetBuilder::new().readable().finalize());
         Token(fd)
     }
-
 
     #[allow(unused)]
     pub fn register_write<T>(&mut self, io: &mut T) -> Token
