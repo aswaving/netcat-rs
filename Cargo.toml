@@ -13,5 +13,6 @@ name = "nc"
 path = "src/main.rs"
 
 [dependencies]
-libc = "0.2"
-clap = "2"
+libc = "0.2.77"
+clap = "2.33.3"
+socket2 = "0.3.15"
