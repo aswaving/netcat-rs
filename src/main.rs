@@ -236,6 +236,8 @@ impl EventHandler for NetcatClientEventHandler {
         }
     }
 
+    fn error(&mut self, _eventloop: &mut EventLoop, _stream_id: Token) {}
+
     fn timeout(&mut self, eventloop: &mut EventLoop) {
         trace!("timeout");
 

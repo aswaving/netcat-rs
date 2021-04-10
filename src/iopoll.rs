@@ -16,13 +16,13 @@ pub struct EventLoop {
 
 pub trait EventHandler {
     fn ready_for_io(&mut self, event_loop: &mut EventLoop, stream_id: Token, eventset: EventSet);
-    fn error(&mut self, event_loop: &mut EventLoop, stream_id: Token) {}
-    fn hangup(&mut self, event_loop: &mut EventLoop, stream_id: Token) {}
+    fn error(&mut self, event_loop: &mut EventLoop, stream_id: Token);
+    fn hangup(&mut self, event_loop: &mut EventLoop, stream_id: Token);
     fn not_valid(&mut self, event_loop: &mut EventLoop, stream_id: Token) {
         let Token(fd) = stream_id;
         event_loop.remove_fd(fd);
     }
-    fn timeout(&mut self, event_loop: &mut EventLoop) {}
+    fn timeout(&mut self, event_loop: &mut EventLoop);
 }
 
 pub const TIMEOUT_INFINITE: i32 = -1;
