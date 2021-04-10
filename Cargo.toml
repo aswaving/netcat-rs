@@ -3,6 +3,7 @@ name = "netcat-rs"
 version = "0.1.0"
 keywords = ["network"]
 categories = ["command-line-utilities", "network"]
+edition = "2018"
 
 [features]
 default = []
@@ -13,6 +14,5 @@ name = "nc"
 path = "src/main.rs"
 
 [dependencies]
-libc = "0.2.77"
+libc = "0.2.93"
 clap = "2.33.3"
-socket2 = "0.3.15"
