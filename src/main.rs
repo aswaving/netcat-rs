@@ -1,13 +1,9 @@
-extern crate clap;
-extern crate libc;
-
 #[macro_use]
 mod util;
 mod iopoll;
 
 use crate::iopoll::{EventHandler, EventLoop, EventSet, Token};
 use clap::{App, Arg};
-
 use std::io::prelude::*;
 use std::io::{stdin, stdout};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream, UdpSocket};
@@ -24,7 +20,6 @@ struct ProgramOptions {
     use_unix: bool,
     use_udp: bool,
     interval_secs: u32,
-    zero_io_mode: bool,
     hostname: String,
     source_port: u16,
     target_port: u16,
@@ -77,11 +72,6 @@ fn parse_commandline() -> ProgramOptions {
                 .help("Listen mode, for inbound connects"),
         )
         .arg(
-            Arg::with_name("zero-io")
-                .short("z")
-                .help("Zero-I/O mode [used for scanning]"),
-        )
-        .arg(
             Arg::with_name("wait-time")
                 .short("w")
                 .value_name("secs")
@@ -100,28 +90,37 @@ fn parse_commandline() -> ProgramOptions {
         )
         .get_matches();
 
-    let mut options: ProgramOptions = Default::default();
-    options.hostname = matches
+    let hostname = matches
         .value_of("hostname")
         .unwrap_or("localhost")
         .to_string();
-    options.source_port = matches
+
+    let source_port = matches
         .value_of("source-port")
         .map_or(Ok(0), |v| u16::from_str(v))
         .unwrap_or(0);
-    options.target_port = matches
+
+    let target_port = matches
         .value_of("target-port")
         .map_or(Ok(0), |v| u16::from_str(v))
         .unwrap_or(0);
-    options.use_udp = matches.is_present("udp");
-    options.ipv4_only = matches.is_present("ipv4");
-    options.ipv6_only = matches.is_present("ipv6");
-    options.use_listen = matches.is_present("listen");
-    options.verbosity = matches.occurrences_of("verbose") as u8;
-    if let Some(wait_time) = matches.value_of("wait-time") {
-        options.wait_time_ms = Some(u32::from_str(wait_time).expect("Invalid wait time") * 1000);
+
+    let wait_time_ms = matches
+        .value_of("wait-time")
+        .map(|v| u32::from_str(v).expect("Invalid wait time") * 1000);
+
+    ProgramOptions {
+        hostname,
+        source_port,
+        target_port,
+        use_udp: matches.is_present("udp"),
+        wait_time_ms,
+        ipv6_only: matches.is_present("ipv6"),
+        use_listen: matches.is_present("listen"),
+        verbosity: matches.occurrences_of("verbose") as u8,
+        ipv4_only: matches.is_present("ipv4"),
+        ..Default::default()
     }
-    options
 }
 
 pub struct NetcatClientEventHandler {
@@ -278,6 +277,18 @@ fn main() -> std::io::Result<()> {
     } else {
         if options.use_udp {
             let target_addr: IpAddr = options.hostname.parse().expect("Invalid hostname");
+            match target_addr {
+                IpAddr::V4(_) => {
+                    if options.ipv6_only {
+                        panic!("Not an IPv6Addr")
+                    }
+                }
+                IpAddr::V6(_) => {
+                    if options.ipv4_only {
+                        panic!("Not an IPv4Addr")
+                    }
+                }
+            }
             let target_sock: SocketAddr = if target_addr.is_ipv6() {
                 format!("[{}]:{}", options.hostname.as_str(), options.target_port)
                     .parse()
@@ -288,6 +299,8 @@ fn main() -> std::io::Result<()> {
                     .expect("Invalid target")
             };
 
+            trace!("target={:?}", target_sock);
+
             let bind_addr = if target_addr.is_ipv4() {
                 IpAddr::V4(Ipv4Addr::UNSPECIFIED)
             } else {
@@ -297,7 +310,7 @@ fn main() -> std::io::Result<()> {
             sock.connect(&target_sock)
                 .unwrap_or_else(|_| panic!("Error connecting to UDP socket {:?}", sock));
 
-            trace!("{:?}", sock);
+            trace!("localsock={:?}", sock);
 
             if let Some(timeout) = options.wait_time_ms {
                 sock.set_read_timeout(Some(Duration::new(u64::from(timeout), 0)))?;
@@ -305,11 +318,9 @@ fn main() -> std::io::Result<()> {
             eventloop.register_read(&sock);
             connection = NetworkConnection::UdpClient(sock);
         } else {
-            let tcpstream =
-                TcpStream::connect((options.hostname.as_str(), options.target_port))?;
+            let tcpstream = TcpStream::connect((options.hostname.as_str(), options.target_port))?;
             if let Some(timeout) = options.wait_time_ms {
-                tcpstream
-                    .set_read_timeout(Some(Duration::new(u64::from(timeout), 0)))?;
+                tcpstream.set_read_timeout(Some(Duration::new(u64::from(timeout), 0)))?;
             }
             eventloop.register_read(&tcpstream);
             connection = NetworkConnection::TcpClient(tcpstream);
