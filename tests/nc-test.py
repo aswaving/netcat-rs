@@ -7,10 +7,7 @@ from tempfile import mkstemp
 from subprocess import Popen, PIPE
 from random import randint
 
-if platform.system() == 'Linux':
-    NC_PATH = '/bin/nc'
-else:
-    NC_PATH = '/usr/bin/nc'
+build = 'debug'
 
 def generate_random_file(size):
     fd, fname = mkstemp()
@@ -28,7 +25,7 @@ class NetcatClientTests(unittest.TestCase):
         out_fd, out_filename = mkstemp()
         srv = Popen([NC_PATH, '-l', '12340'], stdout=out_fd)
         infd = os.open(fname, os.O_RDONLY)
-        clt = Popen(['target/debug/nc', 'localhost', '12340'], stdin=infd)
+        clt = Popen(['target/' + build + '/nc', 'localhost', '12340'], stdin=infd)
         self.assertEquals(0, clt.wait())
         self.assertEquals(0, srv.wait())
         diff = Popen(['diff', fname, out_filename])
@@ -39,7 +36,7 @@ class NetcatClientTests(unittest.TestCase):
         out_fd, out_filename = mkstemp()
         srv = Popen([NC_PATH, '-l', '12340'], stdout=out_fd)
         infd = os.open(fname, os.O_RDONLY)
-        clt = Popen(['target/debug/nc', 'localhost', '12340'], stdin=infd)
+        clt = Popen(['target/' + build + '/nc', 'localhost', '12340'], stdin=infd)
         self.assertEquals(0, clt.wait())
         self.assertEquals(0, srv.wait())
         diff = Popen(['diff', fname, out_filename])
@@ -50,7 +47,7 @@ class NetcatClientTests(unittest.TestCase):
         out_fd, out_filename = mkstemp()
         srv = Popen([NC_PATH, '-l', '12340'], stdout=out_fd)
         infd = os.open(fname, os.O_RDONLY)
-        clt = Popen(['target/debug/nc', 'localhost', '12340'], stdin=infd)
+        clt = Popen(['target/' + build + '/nc', 'localhost', '12340'], stdin=infd)
         self.assertEquals(0, clt.wait())
         self.assertEquals(0, srv.wait())
         diff = Popen(['diff', fname, out_filename])
@@ -62,7 +59,7 @@ class NetcatClientTests(unittest.TestCase):
         srv = Popen([NC_PATH, '-l', '-u', '-4', '-d',
                      '127.0.0.1', '12340'], stdout=out_fd)
         infd = os.open(fname, os.O_RDONLY)
-        clt = Popen(['target/debug/nc', '-u', '-4', '-w',
+        clt = Popen(['target/' + build + '/nc', '-u', '-4', '-w',
                      '1', '127.0.0.1', '12340'], stdin=infd)
         self.assertEquals(0, clt.wait())
         self.assertEquals(0, srv.wait())
@@ -75,7 +72,7 @@ class NetcatClientTests(unittest.TestCase):
         srv = Popen([NC_PATH, '-l', '-u', '-d',
                      '::1', '12340'], stdout=out_fd)
         infd = os.open(fname, os.O_RDONLY)
-        clt = Popen(['target/debug/nc', '-v', '-u', '-w',
+        clt = Popen(['target/' + build + '/nc', '-v', '-u', '-w',
                      '1', '::1', '12340'], stdin=infd)
         self.assertEquals(0, clt.wait())
         self.assertEquals(0, srv.wait())
@@ -88,7 +85,7 @@ class NetcatClientTests(unittest.TestCase):
         srv = Popen([NC_PATH, '-l', '-u', '-d', '-6',
                      '12340'], stdout=out_fd)
         infd = os.open(fname, os.O_RDONLY)
-        clt = Popen(['target/debug/nc', '-v', '-u', '-6', '-w',
+        clt = Popen(['target/' + build + '/nc', '-v', '-u', '-6', '-w',
                      '1', '::1', '12340'], stdin=infd)
         self.assertEquals(0, clt.wait())
         self.assertEquals(0, srv.wait())
@@ -98,11 +95,28 @@ class NetcatClientTests(unittest.TestCase):
     def test_stdin_pipe_tcp(self):
         outfd, outfilename = mkstemp()
         srv = Popen([NC_PATH, '-l', '12340'], stdout=PIPE)
-        clt = Popen('echo bla | target/debug/nc localhost 12340', shell=True)
+        clt = Popen('echo bla | target/' + build + '/nc localhost 12340', shell=True)
         out, _ = srv.communicate()
         self.assertEquals('bla\n', out)
         self.assertEquals(0, clt.wait())
         self.assertEquals(0, srv.wait())
 
 if __name__ == "__main__":
+    import os
+    import sys
+
+    if len(sys.argv) > 1:
+        build = sys.argv[1]
+        del sys.argv[1]
+    
+    print 'testing ' + build + ' build'
+    if not os.path.exists('target/' + build + '/nc'):
+        print 'Error: target executable `nc` does not exits in `target/' + build + '`'
+        exit(1)
+
+    if platform.system() == 'Linux':
+        NC_PATH = '/bin/nc'
+    else:
+        NC_PATH = '/usr/bin/nc'
+
     unittest.main(verbosity=2)

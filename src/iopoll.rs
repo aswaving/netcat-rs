@@ -1,4 +1,3 @@
-// extern crate libc;
 use libc::{nfds_t, poll, pollfd, POLLERR, POLLHUP, POLLIN, POLLNVAL, POLLOUT, POLLPRI};
 
 use std::io::Stdin;
@@ -251,7 +250,7 @@ impl EventLoop {
         }
     }
 
-    pub fn register_stdin(&mut self, stdin_stream: &Stdin) -> Token {
+    pub fn register_stdin(&mut self, _stdin_stream: &Stdin) -> Token {
         let eventset = EventSetBuilder::new().readable().finalize();
         self.register_fd(0, eventset);
         Token(0)
