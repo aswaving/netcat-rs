@@ -1,3 +1,3 @@
 #!/bin/sh
 
-python tests/nc-test.py $1
+python3 tests/nc-test.py $1

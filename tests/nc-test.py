@@ -11,8 +11,8 @@ build = 'debug'
 
 def generate_random_file(size):
     fd, fname = mkstemp()
-    f = os.fdopen(fd, 'w')
-    data = bytearray([randint(0, 255) for _ in range(size)])
+    f = os.fdopen(fd, 'wb')
+    data = bytes([randint(0, 255) for _ in range(size)])
     f.write(data)
     f.close()
     return fname
@@ -26,10 +26,10 @@ class NetcatClientTests(unittest.TestCase):
         srv = Popen([NC_PATH, '-l', '12340'], stdout=out_fd)
         infd = os.open(fname, os.O_RDONLY)
         clt = Popen(['target/' + build + '/nc', 'localhost', '12340'], stdin=infd)
-        self.assertEquals(0, clt.wait())
-        self.assertEquals(0, srv.wait())
+        self.assertEqual(0, clt.wait())
+        self.assertEqual(0, srv.wait())
         diff = Popen(['diff', fname, out_filename])
-        self.assertEquals(0, diff.wait())
+        self.assertEqual(0, diff.wait())
 
     def test_stdin_redirect_tcp_zero_sized_file(self):
         fname = generate_random_file(0)
@@ -37,10 +37,10 @@ class NetcatClientTests(unittest.TestCase):
         srv = Popen([NC_PATH, '-l', '12340'], stdout=out_fd)
         infd = os.open(fname, os.O_RDONLY)
         clt = Popen(['target/' + build + '/nc', 'localhost', '12340'], stdin=infd)
-        self.assertEquals(0, clt.wait())
-        self.assertEquals(0, srv.wait())
+        self.assertEqual(0, clt.wait())
+        self.assertEqual(0, srv.wait())
         diff = Popen(['diff', fname, out_filename])
-        self.assertEquals(0, diff.wait())
+        self.assertEqual(0, diff.wait())
 
     def test_stdin_redirect_tcp_small_filesize(self):
         fname = generate_random_file(1)
@@ -48,10 +48,10 @@ class NetcatClientTests(unittest.TestCase):
         srv = Popen([NC_PATH, '-l', '12340'], stdout=out_fd)
         infd = os.open(fname, os.O_RDONLY)
         clt = Popen(['target/' + build + '/nc', 'localhost', '12340'], stdin=infd)
-        self.assertEquals(0, clt.wait())
-        self.assertEquals(0, srv.wait())
+        self.assertEqual(0, clt.wait())
+        self.assertEqual(0, srv.wait())
         diff = Popen(['diff', fname, out_filename])
-        self.assertEquals(0, diff.wait())
+        self.assertEqual(0, diff.wait())
 
     def test_stdin_redirect_udp4(self):
         fname = generate_random_file(32000)
@@ -61,10 +61,10 @@ class NetcatClientTests(unittest.TestCase):
         infd = os.open(fname, os.O_RDONLY)
         clt = Popen(['target/' + build + '/nc', '-u', '-4', '-w',
                      '1', '127.0.0.1', '12340'], stdin=infd)
-        self.assertEquals(0, clt.wait())
-        self.assertEquals(0, srv.wait())
+        self.assertEqual(0, clt.wait())
+        self.assertEqual(0, srv.wait())
         diff = Popen(['diff', fname, out_filename])
-        self.assertEquals(0, diff.wait())
+        self.assertEqual(0, diff.wait())
 
     def test_stdin_redirect_udp46(self):
         fname = generate_random_file(32000)
@@ -74,10 +74,10 @@ class NetcatClientTests(unittest.TestCase):
         infd = os.open(fname, os.O_RDONLY)
         clt = Popen(['target/' + build + '/nc', '-v', '-u', '-w',
                      '1', '::1', '12340'], stdin=infd)
-        self.assertEquals(0, clt.wait())
-        self.assertEquals(0, srv.wait())
+        self.assertEqual(0, clt.wait())
+        self.assertEqual(0, srv.wait())
         diff = Popen(['diff', fname, out_filename])
-        self.assertEquals(0, diff.wait())
+        self.assertEqual(0, diff.wait())
 
     def test_stdin_redirect_udp6(self):
         fname = generate_random_file(32000)
@@ -87,19 +87,19 @@ class NetcatClientTests(unittest.TestCase):
         infd = os.open(fname, os.O_RDONLY)
         clt = Popen(['target/' + build + '/nc', '-v', '-u', '-6', '-w',
                      '1', '::1', '12340'], stdin=infd)
-        self.assertEquals(0, clt.wait())
-        self.assertEquals(0, srv.wait())
+        self.assertEqual(0, clt.wait())
+        self.assertEqual(0, srv.wait())
         diff = Popen(['diff', fname, out_filename])
-        self.assertEquals(0, diff.wait())
+        self.assertEqual(0, diff.wait())
 
     def test_stdin_pipe_tcp(self):
         outfd, outfilename = mkstemp()
         srv = Popen([NC_PATH, '-l', '12340'], stdout=PIPE)
         clt = Popen('echo bla | target/' + build + '/nc localhost 12340', shell=True)
         out, _ = srv.communicate()
-        self.assertEquals('bla\n', out)
-        self.assertEquals(0, clt.wait())
-        self.assertEquals(0, srv.wait())
+        self.assertEqual(b'bla\n', out)
+        self.assertEqual(0, clt.wait())
+        self.assertEqual(0, srv.wait())
 
 if __name__ == "__main__":
     import os
@@ -109,9 +109,9 @@ if __name__ == "__main__":
         build = sys.argv[1]
         del sys.argv[1]
     
-    print 'testing ' + build + ' build'
+    print('testing ' + build + ' build')
     if not os.path.exists('target/' + build + '/nc'):
-        print 'Error: target executable `nc` does not exits in `target/' + build + '`'
+        print('Error: target executable `nc` does not exits in `target/' + build + '`')
         exit(1)
 
     if platform.system() == 'Linux':
