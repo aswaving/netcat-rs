@@ -97,12 +97,12 @@ fn parse_commandline() -> ProgramOptions {
 
     let source_port = matches
         .value_of("source-port")
-        .map_or(Ok(0), |v| u16::from_str(v))
+        .map_or(Ok(0), u16::from_str)
         .unwrap_or(0);
 
     let target_port = matches
         .value_of("target-port")
-        .map_or(Ok(0), |v| u16::from_str(v))
+        .map_or(Ok(0), u16::from_str)
         .unwrap_or(0);
 
     let wait_time_ms = matches
@@ -309,7 +309,7 @@ fn main() -> std::io::Result<()> {
                 IpAddr::V6(Ipv6Addr::UNSPECIFIED)
             };
             let sock = UdpSocket::bind(SocketAddr::new(bind_addr, options.source_port)).unwrap();
-            sock.connect(&target_sock)
+            sock.connect(target_sock)
                 .unwrap_or_else(|_| panic!("Error connecting to UDP socket {:?}", sock));
 
             trace!("localsock={:?}", sock);

@@ -187,17 +187,17 @@ impl EventLoop {
                 _ => {
                     trace!("poll_result={} descriptors ready for io", poll_result);
 
-                    let mut bla = Vec::<(RawFd, EventSet)>::new();
+                    let mut triggered_events = Vec::<(RawFd, EventSet)>::new();
                     for pollfd in &mut self.pollfds {
                         let received_events = EventSet {
                             events: pollfd.revents,
                         };
                         if !received_events.is_empty() {
-                            bla.push((pollfd.fd, received_events));
+                            triggered_events.push((pollfd.fd, received_events));
                         }
                     }
-                    for (nr, &(fd, eventset)) in bla.iter().enumerate() {
-                        trace!("{}: event {} on fd {}", nr, eventset, fd);
+                    for (fd, eventset) in triggered_events.into_iter() {
+                        trace!("event {} on fd {}", eventset, fd);
 
                         if eventset.is_readable() || eventset.is_writable() {
                             event_handler.ready_for_io(self, Token(fd), eventset);
