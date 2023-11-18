@@ -3,14 +3,14 @@ mod util;
 mod iopoll;
 
 use crate::iopoll::{EventHandler, EventLoop, EventSet, Token};
-use clap::{Parser};
+use clap::Parser;
 use std::io::prelude::*;
 use std::io::{stdin, stdout};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream, UdpSocket};
 use std::process::exit;
 use std::time::Duration;
 
-#[derive(Parser, Default, Debug)]
+#[derive(Parser, Debug)]
 #[command(author, version)]
 struct ProgramOptions {
     #[arg(short='4', help="Use IPv4 only")]
@@ -42,112 +42,6 @@ struct ProgramOptions {
 enum NetworkConnection {
     TcpClient(TcpStream),
     UdpClient(UdpSocket),
-}
-
-fn parse_commandline() -> ProgramOptions {
-    ProgramOptions::parse()
-    // let matches = App::new("netcat")
-    //     .version("0.1.0")
-    //     .arg(
-    //         Arg::with_name("ipv4")
-    //             .short('4')
-    //             .help("Forces use of IPv4 addresses only."),
-    //     )
-    //     .arg(
-    //         Arg::with_name("ipv6")
-    //             .short('6')
-    //             .help("Forces use of IPv6 addresses only."),
-    //     )
-    //     .arg(
-    //         Arg::with_name("udp")
-    //             .short('u')
-    //             .long("udp")
-    //             .help("UDP mode"),
-    //     )
-    //     .arg(Arg::with_name("hostname").required(false))
-    //     .arg(Arg::with_name("target-port").required(false))
-    //     .arg(
-    //         Arg::with_name("verbose")
-    //             .short('v')
-    //             .multiple(true)
-    //             .help("Set verbosity level (can be used several times)"),
-    //     )
-    //     .arg(
-    //         Arg::with_name("no-dns")
-    //             .short('n')
-    //             .long("nodns")
-    //             .help("Suppress name/port resolutions"),
-    //     )
-    //     .arg(
-    //         Arg::with_name("listen")
-    //             .short('l')
-    //             .long("listen")
-    //             .help("Listen mode, for inbound connects"),
-    //     )
-    //     .arg(
-    //         Arg::with_name("wait-time")
-    //             .short('w')
-    //             .value_name("secs")
-    //             .help("Timeout for connects and final net reads"),
-    //     )
-    //     .arg(
-    //         Arg::with_name("detach-stdin")
-    //             .short('d')
-    //             .help("Detach from stdin"),
-    //     )
-    //     .arg(
-    //         Arg::with_name("source-port")
-    //             .short('p')
-    //             .long("source-port")
-    //             .value_name("port"),
-    //     )
-    //     .arg(
-    //         Arg::with_name("interval")
-    //             .short('i')
-    //             .long("interval-port")
-    //             .value_name("secs")
-    //             .help("Delay time between lines of text sent and received"),
-    //     )
-    //     .get_matches();
-
-    // let hostname = matches
-    //     .value_of("hostname")
-    //     .unwrap_or("localhost")
-    //     .to_string();
-
-    // let source_port = matches
-    //     .value_of("source-port")
-    //     .map_or(Ok(0), u16::from_str)
-    //     .unwrap_or(0);
-
-    // let target_port = matches
-    //     .value_of("target-port")
-    //     .map_or(Ok(0), u16::from_str)
-    //     .unwrap_or(0);
-
-    // let wait_time_ms = matches
-    //     .value_of("wait-time")
-    //     .map(|v| u32::from_str(v).expect("Invalid wait time") * 1000);
-
-    // let interval_secs = matches
-    //     .value_of("interval")
-    //     .map(|v| i32::from_str(v).expect("Invalid interval"));
-
-    // ProgramOptions {
-    //     hostname,
-    //     source_port,
-    //     target_port,
-    //     use_udp: matches.is_present("udp"),
-    //     wait_time_ms,
-    //     ipv6_only: matches.is_present("ipv6"),
-    //     use_listen: matches.is_present("listen"),
-    //     verbosity: matches.occurrences_of("verbose") as u8,
-    //     ipv4_only: matches.is_present("ipv4"),
-    //     interval_secs,
-    //     no_dns: matches.is_present("no-dns"),
-    //     detach_stdin: matches.is_present("detach-stdin"),
-    //     use_unix: matches.is_present("use-unix"),
-    // }
 }
 
 pub struct NetcatClientEventHandler {
@@ -282,9 +176,8 @@ impl EventHandler for NetcatClientEventHandler {
 }
 
 fn main() -> std::io::Result<()> {
-    let options = parse_commandline();
+    let options = ProgramOptions::parse();
     let mut exit_code = 0;
-
     let stdin = stdin();
     let connection;
     let mut eventloop = EventLoop::new_with_timeout(options.wait_time_ms);
