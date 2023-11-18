@@ -3,27 +3,39 @@ mod util;
 mod iopoll;
 
 use crate::iopoll::{EventHandler, EventLoop, EventSet, Token};
-use clap::{App, Arg};
+use clap::{Parser};
 use std::io::prelude::*;
 use std::io::{stdin, stdout};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream, UdpSocket};
 use std::process::exit;
-use std::str::FromStr;
 use std::time::Duration;
 
-#[derive(Default, Debug)]
+#[derive(Parser, Default, Debug)]
+#[command(author, version)]
 struct ProgramOptions {
+    #[arg(short='4', help="Use IPv4 only")]
     ipv4_only: bool,
+    #[arg(short='6', help="Use IPv6 only")]
     ipv6_only: bool,
+    #[arg(short='l')]
     use_listen: bool,
+    #[arg(short, help="Detach stdin")]
     detach_stdin: bool,
+    #[arg(short='U', help="Use UNIX domain sockets")]
     use_unix: bool,
+    #[arg(short, help="Use UDP")]
     use_udp: bool,
-    interval_secs: u32,
+    #[arg(short, help="Don't lookup address using DNS")]
+    no_dns: bool,
+    #[arg(short)]
+    interval_secs: Option<i32>,
     hostname: String,
-    source_port: u16,
+    #[arg(short='p')]
+    source_port: Option<u16>,
     target_port: u16,
-    verbosity: u8,
+    #[arg(short, help="Verbose output")]
+    verbose: bool,
+    #[arg(short, help="wait time in ms")]
     wait_time_ms: Option<u32>,
 }
 
@@ -33,94 +45,109 @@ enum NetworkConnection {
 }
 
 fn parse_commandline() -> ProgramOptions {
-    let matches = App::new("netcat")
-        .version("0.1.0")
-        .arg(
-            Arg::with_name("ipv4")
-                .short("4")
-                .help("Forces use of IPv4 addresses only."),
-        )
-        .arg(
-            Arg::with_name("ipv6")
-                .short("6")
-                .help("Forces use of IPv6 addresses only."),
-        )
-        .arg(
-            Arg::with_name("udp")
-                .short("u")
-                .long("udp")
-                .help("UDP mode"),
-        )
-        .arg(Arg::with_name("hostname").required(false))
-        .arg(Arg::with_name("target-port").required(false))
-        .arg(
-            Arg::with_name("verbose")
-                .short("v")
-                .multiple(true)
-                .help("Set verbosity level (can be used several times)"),
-        )
-        .arg(
-            Arg::with_name("no-dns")
-                .short("n")
-                .long("nodns")
-                .help("Suppress name/port resolutions"),
-        )
-        .arg(
-            Arg::with_name("listen")
-                .short("l")
-                .long("listen")
-                .help("Listen mode, for inbound connects"),
-        )
-        .arg(
-            Arg::with_name("wait-time")
-                .short("w")
-                .value_name("secs")
-                .help("Timeout for connects and final net reads"),
-        )
-        .arg(
-            Arg::with_name("detach-stdin")
-                .short("d")
-                .help("Detach from stdin"),
-        )
-        .arg(
-            Arg::with_name("source-port")
-                .short("p")
-                .long("source-port")
-                .value_name("port"),
-        )
-        .get_matches();
+    ProgramOptions::parse()
+    // let matches = App::new("netcat")
+    //     .version("0.1.0")
+    //     .arg(
+    //         Arg::with_name("ipv4")
+    //             .short('4')
+    //             .help("Forces use of IPv4 addresses only."),
+    //     )
+    //     .arg(
+    //         Arg::with_name("ipv6")
+    //             .short('6')
+    //             .help("Forces use of IPv6 addresses only."),
+    //     )
+    //     .arg(
+    //         Arg::with_name("udp")
+    //             .short('u')
+    //             .long("udp")
+    //             .help("UDP mode"),
+    //     )
+    //     .arg(Arg::with_name("hostname").required(false))
+    //     .arg(Arg::with_name("target-port").required(false))
+    //     .arg(
+    //         Arg::with_name("verbose")
+    //             .short('v')
+    //             .multiple(true)
+    //             .help("Set verbosity level (can be used several times)"),
+    //     )
+    //     .arg(
+    //         Arg::with_name("no-dns")
+    //             .short('n')
+    //             .long("nodns")
+    //             .help("Suppress name/port resolutions"),
+    //     )
+    //     .arg(
+    //         Arg::with_name("listen")
+    //             .short('l')
+    //             .long("listen")
+    //             .help("Listen mode, for inbound connects"),
+    //     )
+    //     .arg(
+    //         Arg::with_name("wait-time")
+    //             .short('w')
+    //             .value_name("secs")
+    //             .help("Timeout for connects and final net reads"),
+    //     )
+    //     .arg(
+    //         Arg::with_name("detach-stdin")
+    //             .short('d')
+    //             .help("Detach from stdin"),
+    //     )
+    //     .arg(
+    //         Arg::with_name("source-port")
+    //             .short('p')
+    //             .long("source-port")
+    //             .value_name("port"),
+    //     )
+    //     .arg(
+    //         Arg::with_name("interval")
+    //             .short('i')
+    //             .long("interval-port")
+    //             .value_name("secs")
+    //             .help("Delay time between lines of text sent and received"),
+    //     )
+    //     .get_matches();
 
-    let hostname = matches
-        .value_of("hostname")
-        .unwrap_or("localhost")
-        .to_string();
+    // let hostname = matches
+    //     .value_of("hostname")
+    //     .unwrap_or("localhost")
+    //     .to_string();
 
-    let source_port = matches
-        .value_of("source-port")
-        .map_or(Ok(0), u16::from_str)
-        .unwrap_or(0);
+    // let source_port = matches
+    //     .value_of("source-port")
+    //     .map_or(Ok(0), u16::from_str)
+    //     .unwrap_or(0);
 
-    let target_port = matches
-        .value_of("target-port")
-        .map_or(Ok(0), u16::from_str)
-        .unwrap_or(0);
+    // let target_port = matches
+    //     .value_of("target-port")
+    //     .map_or(Ok(0), u16::from_str)
+    //     .unwrap_or(0);
 
-    let wait_time_ms = matches
-        .value_of("wait-time")
-        .map(|v| u32::from_str(v).expect("Invalid wait time") * 1000);
+    // let wait_time_ms = matches
+    //     .value_of("wait-time")
+    //     .map(|v| u32::from_str(v).expect("Invalid wait time") * 1000);
 
-    ProgramOptions {
-        hostname,
-        source_port,
-        target_port,
-        use_udp: matches.is_present("udp"),
-        wait_time_ms,
-        ipv6_only: matches.is_present("ipv6"),
-        use_listen: matches.is_present("listen"),
-        verbosity: matches.occurrences_of("verbose") as u8,
-        ipv4_only: matches.is_present("ipv4"),
-        ..Default::default()
-    }
+    // let interval_secs = matches
+    //     .value_of("interval")
+    //     .map(|v| i32::from_str(v).expect("Invalid interval"));
+
+    // ProgramOptions {
+    //     hostname,
+    //     source_port,
+    //     target_port,
+    //     use_udp: matches.is_present("udp"),
+    //     wait_time_ms,
+    //     ipv6_only: matches.is_present("ipv6"),
+    //     use_listen: matches.is_present("listen"),
+    //     verbosity: matches.occurrences_of("verbose") as u8,
+    //     ipv4_only: matches.is_present("ipv4"),
+    //     interval_secs,
+    //     no_dns: matches.is_present("no-dns"),
+    //     detach_stdin: matches.is_present("detach-stdin"),
+    //     use_unix: matches.is_present("use-unix"),
+    // }
 }
 
 pub struct NetcatClientEventHandler {
@@ -140,7 +167,12 @@ impl NetcatClientEventHandler {
 }
 
 impl EventHandler for NetcatClientEventHandler {
-    fn ready_for_io(&mut self, event_loop: &mut EventLoop, token: Token, eventset: EventSet) {
+    fn ready_for_io(
+        &mut self,
+        event_loop: &mut EventLoop,
+        token: Token,
+        eventset: EventSet,
+    ) -> std::io::Result<()> {
         trace!("ready for io token={:?},eventset={}", token, eventset);
 
         let mut shutdown_loop = false;
@@ -158,24 +190,20 @@ impl EventHandler for NetcatClientEventHandler {
 
                             match self.network_client {
                                 NetworkConnection::TcpClient(ref mut tcpstream) => {
-                                    tcpstream.write_all(&buf[0..n]).unwrap();
+                                    tcpstream.write_all(&buf[0..n])?;
                                 }
                                 NetworkConnection::UdpClient(ref mut udpsocket) => {
                                     match udpsocket.send(&buf[0..n]) {
                                         Ok(sent) => {
-                                            shutdown_loop = sent != n;
-                                            if shutdown_loop {
+                                            if sent != n {
                                                 eprintln!(
-                                                    "Shutting down loop after udp send, number of bytes sent {} != num bytes in buf {}",
-                                                    sent,
-                                                    n
-                                                );
+                                                    "Shutting down loop after udp send, number of bytes sent {sent} != num bytes in buf {n}");
+                                                shutdown_loop = true;
                                             }
                                         }
                                         Err(err) => {
                                             eprintln!(
-                                                "Shutting down loop, error when sending to udpsocket {}",
-                                                err
+                                                "Shutting down loop, error when sending to udpsocket {err}" 
                                             );
                                             shutdown_loop = true;
                                         }
@@ -188,7 +216,7 @@ impl EventHandler for NetcatClientEventHandler {
                                 if let NetworkConnection::TcpClient(ref mut tcpstream) =
                                     self.network_client
                                 {
-                                    tcpstream.shutdown(std::net::Shutdown::Write).unwrap();
+                                    tcpstream.shutdown(std::net::Shutdown::Write)?;
                                     // TODO
                                 }
                             }
@@ -215,7 +243,7 @@ impl EventHandler for NetcatClientEventHandler {
                 } {
                     trace!("Read/recv done, writing to stdout");
 
-                    stdout.lock().write_all(&buf[0..n]).unwrap();
+                    stdout.lock().write_all(&buf[0..n])?;
 
                     trace!("Write to stdout done");
 
@@ -231,9 +259,9 @@ impl EventHandler for NetcatClientEventHandler {
 
         if shutdown_loop {
             trace!("Event loop is shut down");
-
             event_loop.shutdown();
         }
+        Ok(())
     }
 
     fn error(&mut self, _eventloop: &mut EventLoop, _stream_id: Token) {}
@@ -255,17 +283,17 @@ impl EventHandler for NetcatClientEventHandler {
 
 fn main() -> std::io::Result<()> {
     let options = parse_commandline();
-    if options.verbosity > 1 {
-        eprintln!("options: {:?}", options);
-    }
-
     let mut exit_code = 0;
 
     let stdin = stdin();
     let connection;
-    let mut eventloop = EventLoop::new(options.wait_time_ms);
+    let mut eventloop = EventLoop::new_with_timeout(options.wait_time_ms);
     if !options.detach_stdin {
         eventloop.register_stdin(&stdin);
+    }
+    if options.use_unix {
+        println!("UNIX domain sockets are currently unsupported");
+        exit(1);
     }
 
     if options.use_listen {
@@ -282,12 +310,14 @@ fn main() -> std::io::Result<()> {
             match target_addr {
                 IpAddr::V4(_) => {
                     if options.ipv6_only {
-                        panic!("Not an IPv6Addr")
+                        println!("IPV6 only specified and {target_addr:?} is not an IPv6Addr.");
+                        exit(1);
                     }
                 }
                 IpAddr::V6(_) => {
                     if options.ipv4_only {
-                        panic!("Not an IPv4Addr")
+                        println!("IPV4 only specified and {target_addr:?} is not an I4v6Addr.");
+                        exit(1);
                     }
                 }
             }
@@ -308,9 +338,8 @@ fn main() -> std::io::Result<()> {
             } else {
                 IpAddr::V6(Ipv6Addr::UNSPECIFIED)
             };
-            let sock = UdpSocket::bind(SocketAddr::new(bind_addr, options.source_port)).unwrap();
-            sock.connect(target_sock)
-                .unwrap_or_else(|_| panic!("Error connecting to UDP socket {:?}", sock));
+            let sock = UdpSocket::bind(SocketAddr::new(bind_addr, options.source_port.unwrap_or(0)))?;
+            sock.connect(target_sock)?;
 
             trace!("localsock={:?}", sock);
 
@@ -331,8 +360,8 @@ fn main() -> std::io::Result<()> {
         let mut eh = NetcatClientEventHandler::new(connection);
         if let Err(err) = eventloop.run(&mut eh) {
             exit_code = 1;
-            if options.verbosity > 0 {
-                eprintln!("{}", err);
+            if options.verbose  {
+                eprintln!("{err}");
             }
         }
     }
