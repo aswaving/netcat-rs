@@ -1,21 +1,30 @@
-use libc::{nfds_t, poll, pollfd, POLLERR, POLLHUP, POLLIN, POLLNVAL, POLLOUT, POLLPRI};
-
+//! Event loop wrapper around the [`poll`] function.
+//! 
+use libc::{nfds_t, poll, pollfd, POLLERR, POLLHUP, POLLIN, POLLNVAL, POLLOUT, POLLPRI, c_int};
+use std::fmt;
 use std::io::Stdin;
 use std::os::unix::io::{AsRawFd, RawFd};
-
-use std::fmt;
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub struct Token(pub i32);
 
 pub struct EventLoop {
+    /// Registered file descriptors that are polled for I/O.
     pollfds: Vec<pollfd>,
-    timeout: i32,
+    /// Timeout used in the [`poll`] call. (0: return immediately without blocking, -1: wait indefinitely.)
+    timeout: c_int,
+    /// Flag indicating whether the main loop is active, `run` sets `active` to `true`,
+    /// `shutdown` sets `active` to false, eventually stopping the main loop.
     active: bool,
 }
 
 pub trait EventHandler {
-    fn ready_for_io(&mut self, event_loop: &mut EventLoop, stream_id: Token, eventset: EventSet);
+    fn ready_for_io(
+        &mut self,
+        event_loop: &mut EventLoop,
+        stream_id: Token,
+        eventset: EventSet,
+    ) -> std::io::Result<()>;
     fn error(&mut self, event_loop: &mut EventLoop, stream_id: Token);
     fn hangup(&mut self, event_loop: &mut EventLoop, stream_id: Token);
     fn not_valid(&mut self, event_loop: &mut EventLoop, stream_id: Token) {
@@ -25,7 +34,7 @@ pub trait EventHandler {
     fn timeout(&mut self, event_loop: &mut EventLoop);
 }
 
-pub const TIMEOUT_INFINITE: i32 = -1;
+pub const TIMEOUT_INFINITE: c_int = -1;
 
 #[derive(Copy, Clone)]
 pub struct EventSet {
@@ -37,32 +46,32 @@ impl EventSet {
         EventSet { events: 0 }
     }
 
-    pub fn is_readable(&self) -> bool {
+    pub fn is_readable(self) -> bool {
         (self.events & POLLIN) == POLLIN || (self.events & POLLPRI) == POLLPRI
     }
 
     #[allow(unused)]
-    pub fn is_high_prio_readable(&self) -> bool {
+    pub fn is_high_prio_readable(self) -> bool {
         (self.events & POLLPRI) == POLLPRI
     }
 
-    pub fn is_writable(&self) -> bool {
+    pub fn is_writable(self) -> bool {
         (self.events & POLLOUT) == POLLOUT
     }
 
-    pub fn is_not_valid(&self) -> bool {
+    pub fn is_not_valid(self) -> bool {
         (self.events & POLLNVAL) == POLLNVAL
     }
 
-    pub fn is_error(&self) -> bool {
+    pub fn is_error(self) -> bool {
         (self.events & POLLERR) == POLLERR
     }
 
-    pub fn is_hangup(&self) -> bool {
+    pub fn is_hangup(self) -> bool {
         (self.events & POLLHUP) == POLLHUP
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub fn is_empty(self) -> bool {
         self.events == 0
     }
 }
@@ -93,7 +102,7 @@ impl fmt::Display for EventSet {
             let last_char_idx = events_str.len() - 1;
             events_str.remove(last_char_idx);
         }
-        write!(formatter, "{}", events_str)
+        write!(formatter, "{events_str}")
     }
 }
 
@@ -130,10 +139,19 @@ impl EventSetBuilder {
 }
 
 impl EventLoop {
-    pub fn new(timeout: Option<u32>) -> EventLoop {
+    /// Create a new event loop (with infinite timeout)
+    #[allow(unused)]
+    pub fn new() -> EventLoop {
+        EventLoop::new_with_timeout(None)
+    }
+
+    /// Create a new event loop with timeout.
+    /// `None` implies the infinite timeout.
+    /// Panics when timeout > i32::MAX.
+    pub fn new_with_timeout(timeout: Option<u32>) -> EventLoop {
         let mut my_timeout = TIMEOUT_INFINITE;
         if let Some(timeout) = timeout {
-            my_timeout = timeout as i32;
+            my_timeout = c_int::try_from(timeout).unwrap(); // TODO
         }
         EventLoop {
             pollfds: Vec::<pollfd>::new(),
@@ -142,43 +160,45 @@ impl EventLoop {
         }
     }
 
-    fn activate(&mut self) {
-        self.active = true;
-    }
-
     pub fn is_active(&self) -> bool {
         self.active
     }
 
     pub fn shutdown(&mut self) {
         self.active = false;
-
-        trace!("Event loop deactivated");
+        trace!("Event loop shutdown requested");
     }
 
     pub fn remove_fd(&mut self, fd: RawFd) {
         let found = self
             .pollfds
             .iter()
-            .enumerate()
-            .find(|&(_, pollfd)| pollfd.fd == fd)
-            .map(|(i, _)| i);
+            .position(|pollfd| pollfd.fd == fd);
         if let Some(index) = found {
             self.pollfds.remove(index);
+        } else {
+            panic!();
         }
     }
 
     pub fn run(&mut self, event_handler: &mut dyn EventHandler) -> Result<(), String> {
         let pollfds_ptr = self.pollfds.as_mut_ptr();
-        self.activate();
+        self.active = true;
         let result = Ok(());
         while self.is_active() {
             let mut remove_pollfds = Vec::<RawFd>::new();
-            let poll_result =
-                unsafe { poll(pollfds_ptr, self.pollfds.len() as nfds_t, self.timeout) };
+            let poll_result = unsafe {
+                poll(
+                    pollfds_ptr,
+                    nfds_t::try_from(self.pollfds.len()).unwrap(), // TODO
+                    self.timeout,
+                )
+            };
             let mut shutdown_loop = false;
             match poll_result {
                 -1 => {
+                    // todo handle error, look at errno
+                    trace!("Last I/O error {:?}", std::io::Error::last_os_error());
                     shutdown_loop = true;
                 }
                 0 => {
@@ -186,7 +206,6 @@ impl EventLoop {
                 }
                 _ => {
                     trace!("poll_result={} descriptors ready for io", poll_result);
-
                     let mut triggered_events = Vec::<(RawFd, EventSet)>::new();
                     for pollfd in &mut self.pollfds {
                         let received_events = EventSet {
@@ -196,11 +215,12 @@ impl EventLoop {
                             triggered_events.push((pollfd.fd, received_events));
                         }
                     }
-                    for (fd, eventset) in triggered_events.into_iter() {
+                    for (fd, eventset) in triggered_events {
                         trace!("event {} on fd {}", eventset, fd);
-
                         if eventset.is_readable() || eventset.is_writable() {
-                            event_handler.ready_for_io(self, Token(fd), eventset);
+                            if let Err(e) = event_handler.ready_for_io(self, Token(fd), eventset) {
+                                return Err(e.to_string());
+                            }
                         }
                         if eventset.is_hangup() {
                             event_handler.hangup(self, Token(fd));
@@ -222,14 +242,14 @@ impl EventLoop {
 
             if shutdown_loop {
                 trace!("Event loop is shut down");
-
                 self.shutdown();
             }
         }
         result
     }
 
-    fn register_fd(&mut self, fd: i32, eventset: EventSet) {
+    /// Register filedescriptor with given event set.
+    fn register_fd(&mut self, fd: RawFd, eventset: EventSet) {
         let pollfd = pollfd {
             fd,
             events: eventset.events,
@@ -238,7 +258,8 @@ impl EventLoop {
         self.pollfds.push(pollfd);
     }
 
-    fn unregister_fd(&mut self, fd: i32) {
+    /// Unregister file descriptor
+    fn unregister_fd(&mut self, fd: RawFd) {
         let found = self
             .pollfds
             .iter()
@@ -250,12 +271,14 @@ impl EventLoop {
         }
     }
 
-    pub fn register_stdin(&mut self, _stdin_stream: &Stdin) -> Token {
+    /// Register stdin for read events.
+    pub fn register_stdin(&mut self, stdin_stream: &Stdin) -> Token {
         let eventset = EventSetBuilder::new().readable().finalize();
         self.register_fd(0, eventset);
         Token(0)
     }
 
+    /// unregister the stdin (stop listening to I/O events from it.)
     pub fn unregister_stdin(&mut self) {
         self.unregister_fd(0);
     }
