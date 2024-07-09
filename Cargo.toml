@@ -4,7 +4,7 @@ version = "0.1.0"
 keywords = ["network"]
 categories = ["command-line-utilities", "network"]
 edition = "2021"
-rust-version = "1.61.0"
+rust-version = "1.74.1"
 
 [features]
 default = []
@@ -15,5 +15,5 @@ name = "nc"
 path = "src/main.rs"
 
 [dependencies]
-libc = "0.2.150"
-clap = { version = "4.0.32", features = ["derive"] }
+libc = "0.2.155"
+clap = { version = "4.4.18", features = ["derive"] }
