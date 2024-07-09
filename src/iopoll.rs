@@ -274,7 +274,7 @@ impl EventLoop {
     /// Register stdin for read events.
     pub fn register_stdin(&mut self, stdin_stream: &Stdin) -> Token {
         let eventset = EventSetBuilder::new().readable().finalize();
-        self.register_fd(0, eventset);
+        self.register_fd(stdin_stream.as_raw_fd(), eventset);
         Token(0)
     }
 
