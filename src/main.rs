@@ -13,29 +13,35 @@ use std::time::Duration;
 #[derive(Parser, Debug)]
 #[command(author, version)]
 struct ProgramOptions {
-    #[arg(short='4', help="Use IPv4 only")]
+    #[arg(short = '4', help = "Use IPv4 only")]
     ipv4_only: bool,
-    #[arg(short='6', help="Use IPv6 only")]
+    #[arg(short = '6', help = "Use IPv6 only")]
     ipv6_only: bool,
-    #[arg(short='l', long="listen", help="Listen on specified port")]
+    #[arg(short = 'l', long = "listen", help = "Listen on specified port")]
     use_listen: bool,
-    #[arg(short, help="Detach stdin")]
+    #[arg(short, help = "Detach stdin")]
     detach_stdin: bool,
-    #[arg(short='U', help="Use UNIX domain sockets")]
+    #[arg(short = 'U', help = "Use UNIX domain sockets")]
     use_unix: bool,
-    #[arg(short, help="Use UDP")]
+    #[arg(short, help = "Use UDP")]
     use_udp: bool,
-    #[arg(short, help="Don't lookup address using DNS")]
+    #[arg(short, help = "Don't lookup address using DNS")]
     no_dns: bool,
-    #[arg(short, help="Delay (in seconds) between lines of text sent and received.")]
+    #[arg(
+        short,
+        help = "Delay (in seconds) between lines of text sent and received."
+    )]
     interval_secs: Option<i32>,
     hostname: String,
-    #[arg(short='p')]
+    #[arg(short = 'p')]
     source_port: Option<u16>,
     target_port: u16,
     #[arg(short, long="verbose", action=clap::ArgAction::Count)]
     verbosity: u8,
-    #[arg(short='w', help="If a connection or stdin is idle for more than TIMEOUT seconds, the connection is silently closed. The default is no timeout.")]
+    #[arg(
+        short = 'w',
+        help = "If a connection or stdin is idle for more than TIMEOUT seconds, the connection is silently closed. The default is no timeout."
+    )]
     timeout: Option<u32>,
 }
 
@@ -231,7 +237,8 @@ fn main() -> std::io::Result<()> {
             } else {
                 IpAddr::V6(Ipv6Addr::UNSPECIFIED)
             };
-            let sock = UdpSocket::bind(SocketAddr::new(bind_addr, options.source_port.unwrap_or(0)))?;
+            let sock =
+                UdpSocket::bind(SocketAddr::new(bind_addr, options.source_port.unwrap_or(0)))?;
             sock.connect(target_sock)?;
 
             trace!("localsock={:?}", sock);
@@ -253,7 +260,7 @@ fn main() -> std::io::Result<()> {
         let mut eh = NetcatClientEventHandler::new(connection);
         if let Err(err) = eventloop.run(&mut eh) {
             exit_code = 1;
-            if options.verbosity > 0  {
+            if options.verbosity > 0 {
                 eprintln!("{err}");
             }
         }

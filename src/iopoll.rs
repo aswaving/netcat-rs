@@ -1,6 +1,6 @@
 //! Event loop wrapper around the [`poll`] function.
-//! 
-use libc::{nfds_t, poll, pollfd, POLLERR, POLLHUP, POLLIN, POLLNVAL, POLLOUT, POLLPRI, c_int};
+//!
+use libc::{c_int, nfds_t, poll, pollfd, POLLERR, POLLHUP, POLLIN, POLLNVAL, POLLOUT, POLLPRI};
 use std::fmt;
 use std::io::Stdin;
 use std::os::unix::io::{AsRawFd, RawFd};
@@ -170,10 +170,7 @@ impl EventLoop {
     }
 
     pub fn remove_fd(&mut self, fd: RawFd) {
-        let found = self
-            .pollfds
-            .iter()
-            .position(|pollfd| pollfd.fd == fd);
+        let found = self.pollfds.iter().position(|pollfd| pollfd.fd == fd);
         if let Some(index) = found {
             self.pollfds.remove(index);
         } else {
