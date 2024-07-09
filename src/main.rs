@@ -117,7 +117,6 @@ impl EventHandler for NetcatClientEventHandler {
                                     self.network_client
                                 {
                                     tcpstream.shutdown(std::net::Shutdown::Write)?;
-                                    // TODO
                                 }
                             }
                         }
@@ -184,10 +183,10 @@ impl EventHandler for NetcatClientEventHandler {
 fn main() -> std::io::Result<()> {
     let options = ProgramOptions::parse();
     let mut exit_code = 0;
-    let stdin = stdin();
-    let connection;
     let mut eventloop = EventLoop::new_with_timeout(options.timeout);
+
     if !options.detach_stdin {
+        let stdin = stdin();
         eventloop.register_stdin(&stdin);
     }
     if options.use_unix {
@@ -196,85 +195,91 @@ fn main() -> std::io::Result<()> {
     }
 
     if options.use_listen {
-        // TODO
         let tcplistener = if options.ipv4_only {
-            TcpListener::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), options.target_port))?
+            TcpListener::bind(SocketAddr::new(
+                IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+                options.target_port,
+            ))?
         } else {
-            TcpListener::bind(SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), options.target_port))?
+            TcpListener::bind(SocketAddr::new(
+                IpAddr::V6(Ipv6Addr::UNSPECIFIED),
+                options.target_port,
+            ))?
         };
 
         if let Ok((stream, _addr)) = tcplistener.accept() {
             eventloop.register_read(&stream);
-            connection = NetworkConnection::TcpClient(stream);
-            let mut eh = NetcatClientEventHandler::new(connection);
-            if let Err(err) = eventloop.run(&mut eh) {
-                exit_code = 1;
-                if options.verbosity > 0 {
-                    eprintln!("{err}");
+            let connection = NetworkConnection::TcpClient(stream);
+            exit_code = handle_connection(connection, eventloop, options);
+        }
+    } else if options.use_udp {
+        let target_addr: IpAddr = options.hostname.parse().expect("Invalid hostname");
+        match target_addr {
+            IpAddr::V4(_) => {
+                if options.ipv6_only {
+                    println!("IPV6 only specified and {target_addr:?} is not an IPv6Addr.");
+                    exit(1);
+                }
+            }
+            IpAddr::V6(_) => {
+                if options.ipv4_only {
+                    println!("IPV4 only specified and {target_addr:?} is not an I4v6Addr.");
+                    exit(1);
                 }
             }
         }
-    } else {
-        if options.use_udp {
-            let target_addr: IpAddr = options.hostname.parse().expect("Invalid hostname");
-            match target_addr {
-                IpAddr::V4(_) => {
-                    if options.ipv6_only {
-                        println!("IPV6 only specified and {target_addr:?} is not an IPv6Addr.");
-                        exit(1);
-                    }
-                }
-                IpAddr::V6(_) => {
-                    if options.ipv4_only {
-                        println!("IPV4 only specified and {target_addr:?} is not an I4v6Addr.");
-                        exit(1);
-                    }
-                }
-            }
-            let target_sock: SocketAddr = if target_addr.is_ipv6() {
-                format!("[{}]:{}", options.hostname.as_str(), options.target_port)
-                    .parse()
-                    .expect("Invalid target")
-            } else {
-                format!("{}:{}", options.hostname.as_str(), options.target_port)
-                    .parse()
-                    .expect("Invalid target")
-            };
-
-            trace!("target={:?}", target_sock);
-
-            let bind_addr = if target_addr.is_ipv4() {
-                IpAddr::V4(Ipv4Addr::UNSPECIFIED)
-            } else {
-                IpAddr::V6(Ipv6Addr::UNSPECIFIED)
-            };
-            let sock =
-                UdpSocket::bind(SocketAddr::new(bind_addr, options.source_port.unwrap_or(0)))?;
-            sock.connect(target_sock)?;
-
-            trace!("localsock={:?}", sock);
-
-            if let Some(timeout) = options.timeout {
-                sock.set_read_timeout(Some(Duration::new(u64::from(timeout), 0)))?;
-            }
-            eventloop.register_read(&sock);
-            connection = NetworkConnection::UdpClient(sock);
+        let target_sock: SocketAddr = if target_addr.is_ipv6() {
+            format!("[{}]:{}", options.hostname.as_str(), options.target_port)
+                .parse()
+                .expect("Invalid target")
         } else {
-            let tcpstream = TcpStream::connect((options.hostname.as_str(), options.target_port))?;
-            if let Some(timeout) = options.timeout {
-                tcpstream.set_read_timeout(Some(Duration::new(u64::from(timeout), 0)))?;
-            }
-            eventloop.register_read(&tcpstream);
-            connection = NetworkConnection::TcpClient(tcpstream);
-        }
+            format!("{}:{}", options.hostname.as_str(), options.target_port)
+                .parse()
+                .expect("Invalid target")
+        };
 
-        let mut eh = NetcatClientEventHandler::new(connection);
-        if let Err(err) = eventloop.run(&mut eh) {
-            exit_code = 1;
-            if options.verbosity > 0 {
-                eprintln!("{err}");
-            }
+        trace!("target={:?}", target_sock);
+
+        let bind_addr = if target_addr.is_ipv4() {
+            IpAddr::V4(Ipv4Addr::UNSPECIFIED)
+        } else {
+            IpAddr::V6(Ipv6Addr::UNSPECIFIED)
+        };
+        let sock = UdpSocket::bind(SocketAddr::new(bind_addr, options.source_port.unwrap_or(0)))?;
+        sock.connect(target_sock)?;
+
+        trace!("localsock={:?}", sock);
+
+        if let Some(timeout) = options.timeout {
+            sock.set_read_timeout(Some(Duration::new(u64::from(timeout), 0)))?;
         }
+        eventloop.register_read(&sock);
+        let connection = NetworkConnection::UdpClient(sock);
+        exit_code = handle_connection(connection, eventloop, options);
+    } else {
+        let tcpstream = TcpStream::connect((options.hostname.as_str(), options.target_port))?;
+        if let Some(timeout) = options.timeout {
+            tcpstream.set_read_timeout(Some(Duration::new(u64::from(timeout), 0)))?;
+        }
+        eventloop.register_read(&tcpstream);
+        let connection = NetworkConnection::TcpClient(tcpstream);
+        exit_code = handle_connection(connection, eventloop, options);
     }
     exit(exit_code);
+}
+
+fn handle_connection(
+    connection: NetworkConnection,
+    mut eventloop: EventLoop,
+    options: ProgramOptions,
+) -> i32 {
+    let mut eh = NetcatClientEventHandler::new(connection);
+    let mut exit_code = 0;
+    if let Err(err) = eventloop.run(&mut eh) {
+        exit_code = 1;
+        if options.verbosity > 0 {
+            eprintln!("{err}");
+        }
+    }
+    exit_code
 }
