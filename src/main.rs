@@ -198,11 +198,22 @@ fn main() -> std::io::Result<()> {
     if options.use_listen {
         // TODO
         let tcplistener = if options.ipv4_only {
-            TcpListener::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 1234))?
+            TcpListener::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), options.target_port))?
         } else {
-            TcpListener::bind(SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 1234))?
+            TcpListener::bind(SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), options.target_port))?
         };
-        eventloop.register_read(&tcplistener);
+
+        if let Ok((stream, _addr)) = tcplistener.accept() {
+            eventloop.register_read(&stream);
+            connection = NetworkConnection::TcpClient(stream);
+            let mut eh = NetcatClientEventHandler::new(connection);
+            if let Err(err) = eventloop.run(&mut eh) {
+                exit_code = 1;
+                if options.verbosity > 0 {
+                    eprintln!("{err}");
+                }
+            }
+        }
     } else {
         if options.use_udp {
             let target_addr: IpAddr = options.hostname.parse().expect("Invalid hostname");
