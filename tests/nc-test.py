@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import platform
+import time
 import unittest
 
 from tempfile import mkstemp
@@ -24,6 +25,7 @@ class NetcatClientTests(unittest.TestCase):
         fname = generate_random_file(32000)
         out_fd, out_filename = mkstemp()
         srv = Popen([NC_PATH, '-l', '12340'], stdout=out_fd)
+        time.sleep(0.1)
         infd = os.open(fname, os.O_RDONLY)
         clt = Popen(['target/' + build + '/nc', 'localhost', '12340'], stdin=infd)
         self.assertEqual(0, clt.wait())
@@ -35,6 +37,7 @@ class NetcatClientTests(unittest.TestCase):
         fname = generate_random_file(0)
         out_fd, out_filename = mkstemp()
         srv = Popen([NC_PATH, '-l', '12340'], stdout=out_fd)
+        time.sleep(0.1)
         infd = os.open(fname, os.O_RDONLY)
         clt = Popen(['target/' + build + '/nc', 'localhost', '12340'], stdin=infd)
         self.assertEqual(0, clt.wait())
@@ -46,6 +49,7 @@ class NetcatClientTests(unittest.TestCase):
         fname = generate_random_file(1)
         out_fd, out_filename = mkstemp()
         srv = Popen([NC_PATH, '-l', '12340'], stdout=out_fd)
+        time.sleep(0.1)
         infd = os.open(fname, os.O_RDONLY)
         clt = Popen(['target/' + build + '/nc', 'localhost', '12340'], stdin=infd)
         self.assertEqual(0, clt.wait())
@@ -58,6 +62,7 @@ class NetcatClientTests(unittest.TestCase):
         out_fd, out_filename = mkstemp()
         srv = Popen([NC_PATH, '-l', '-u', '-4', '-d',
                      '127.0.0.1', '12340'], stdout=out_fd)
+        time.sleep(0.1)
         infd = os.open(fname, os.O_RDONLY)
         clt = Popen(['target/' + build + '/nc', '-u', '-4', '-w',
                      '1', '127.0.0.1', '12340'], stdin=infd)
@@ -71,6 +76,7 @@ class NetcatClientTests(unittest.TestCase):
         out_fd, out_filename = mkstemp()
         srv = Popen([NC_PATH, '-l', '-u', '-d',
                      '::1', '12340'], stdout=out_fd)
+        time.sleep(0.1)
         infd = os.open(fname, os.O_RDONLY)
         clt = Popen(['target/' + build + '/nc', '-v', '-u', '-w',
                      '1', '::1', '12340'], stdin=infd)
@@ -84,6 +90,7 @@ class NetcatClientTests(unittest.TestCase):
         out_fd, out_filename = mkstemp()
         srv = Popen([NC_PATH, '-l', '-u', '-d', '-6',
                      '12340'], stdout=out_fd)
+        time.sleep(0.1)
         infd = os.open(fname, os.O_RDONLY)
         clt = Popen(['target/' + build + '/nc', '-v', '-u', '-6', '-w',
                      '1', '::1', '12340'], stdin=infd)
@@ -95,6 +102,7 @@ class NetcatClientTests(unittest.TestCase):
     def test_stdin_pipe_tcp(self):
         outfd, outfilename = mkstemp()
         srv = Popen([NC_PATH, '-l', '12340'], stdout=PIPE)
+        time.sleep(0.1)
         clt = Popen('echo bla | target/' + build + '/nc localhost 12340', shell=True)
         out, _ = srv.communicate()
         self.assertEqual(b'bla\n', out)
